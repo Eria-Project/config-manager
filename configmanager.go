@@ -21,7 +21,7 @@ type ConfigManager struct {
 
 // Init config manager
 func Init(filepath string) (*ConfigManager, error) {
-	logger.WithField("file", filepath).Debug("Init config")
+	logger.Module("configmanager").WithField("filename", filepath).Debug("Init config")
 	configManager := &ConfigManager{
 		filepath: filepath,
 	}
@@ -34,7 +34,7 @@ func Init(filepath string) (*ConfigManager, error) {
 
 // Load config from file
 func (config *ConfigManager) Load(s interface{}) error {
-	logger.Debug("Loading config")
+	logger.Module("configmanager").Debug("Loading config")
 	bytes, err := ioutil.ReadFile(config.filepath)
 	if err != nil {
 		// TODO What to do if file doesn't exists
@@ -49,13 +49,13 @@ func (config *ConfigManager) Load(s interface{}) error {
 	if err := processTags(s); err != nil {
 		return err
 	}
-	logger.Tracef("%+v", s)
+	logger.Module("configmanager").Tracef("%+v", s)
 	return nil
 }
 
 // Save config to file
 func (config *ConfigManager) Save(s interface{}) error {
-	logger.WithField("file", config.filepath).Debug("Saving config")
+	logger.Module("configmanager").WithField("filename", config.filepath).Debug("Saving config")
 
 	bytes, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
