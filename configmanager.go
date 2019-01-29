@@ -3,8 +3,10 @@ package configmanager
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 
 	"github.com/fsnotify/fsnotify"
@@ -20,13 +22,18 @@ type ConfigManager struct {
 }
 
 // Init config manager
-func Init(filepath string) (*ConfigManager, error) {
-	logger.Module("configmanager").WithField("filename", filepath).Debug("Init config")
-	configManager := &ConfigManager{
-		filepath: filepath,
+func Init(fileName string) (*ConfigManager, error) {
+	logger.Module("configmanager").WithField("filename", fileName).Debug("Init config")
+	path := os.Getenv("ERIA_PATH")
+	if path == "" {
+		return nil, errors.New("env ERIA_PATH not set")
 	}
-	if _, err := os.Stat(filepath); os.IsNotExist(err) {
-		return configManager, errors.New("Config file missing")
+	filePath := filepath.Join(path, fileName)
+	configManager := &ConfigManager{
+		filepath: filePath,
+	}
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("Config file '%s' missing", filePath)
 	}
 
 	return configManager, nil

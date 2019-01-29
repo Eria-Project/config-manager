@@ -1,16 +1,19 @@
 package configmanager
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
-
-	"github.com/fsnotify/fsnotify"
 )
 
 type testStruct struct {
 	A string `default:"A"`
 	B uint   `default:"1"`
-	C bool   //`default:"true"` TOFIX
+	C bool   `default:"true"`
 	D struct {
 		D1 string
 	}
@@ -20,143 +23,205 @@ type testStruct struct {
 	F string `required:"true"`
 }
 
+func generateDefaultConfig() testStruct {
+	config := testStruct{
+		A: "A",
+		B: 1,
+		C: true,
+		D: struct {
+			D1 string
+		}{
+			D1: "Y",
+		},
+		E: []struct {
+			E1 string
+		}{
+			{
+				E1: "Z",
+			},
+			{
+				E1: "W",
+			},
+		},
+		F: "V",
+	}
+	return config
+}
+
 func TestInit(t *testing.T) {
+	currentEnv := os.Getenv("ERIA_PATH") // Save current env
+
+	// Create dummy file for file exist check
+	file, err := ioutil.TempFile("", "test.json")
+	if err == nil {
+		defer file.Close()
+		defer os.Remove(file.Name())
+		file.Write([]byte{0})
+	}
+
+	path := os.TempDir()
+	fileName := strings.TrimPrefix(file.Name(), path)
+	fmt.Println(fileName)
+	fmt.Println(path)
+
 	type args struct {
-		filepath string
+		fileName string
 	}
 	tests := []struct {
 		name    string
 		args    args
 		want    *ConfigManager
 		wantErr bool
+		env     string
 	}{
 		{
 			name:    "Existing file",
-			args:    args{filepath: "./test/fileA.json"},
-			want:    &ConfigManager{filepath: "./test/fileA.json"},
+			args:    args{fileName: fileName},
+			want:    &ConfigManager{filepath: file.Name()},
 			wantErr: false,
+			env:     path,
 		},
 		{
 			name:    "Missing file",
-			args:    args{filepath: "dummy.json"},
-			want:    &ConfigManager{filepath: "dummy.json"},
+			args:    args{fileName: "test.json"},
 			wantErr: true,
+			env:     path,
+		},
+		{
+			name:    "Missing env",
+			args:    args{fileName: "test.json"},
+			wantErr: true,
+			env:     "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Init(tt.args.filepath)
+			os.Setenv("ERIA_PATH", tt.env)
+			got, err := Init(tt.args.fileName)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Init() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
+			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Init() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
+	os.Setenv("ERIA_PATH", currentEnv) // Restore current env
 }
 
-func TestConfigManager_Load(t *testing.T) {
-	type fields struct {
-		filepath string
-		watcher  *fsnotify.Watcher
-	}
-	type args struct {
-		s interface{}
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *testStruct
-		wantErr bool
-	}{
-		{
-			name: "Valid Json file",
-			fields: fields{
-				filepath: "./test/fileA.json",
-			},
-			args: args{
-				s: &testStruct{},
-			},
-			want: &testStruct{
-				A: "X",
-				B: 9,
-				C: false,
-				D: struct {
-					D1 string
-				}{
-					D1: "Y",
-				},
-				E: []struct {
-					E1 string
-				}{
-					{
-						E1: "Z",
-					},
-					{
-						E1: "W",
-					},
-				},
-				F: "V",
-			},
-			wantErr: false,
-		},
-		{
-			name: "Default values",
-			fields: fields{
-				filepath: "./test/fileB.json",
-			},
-			args: args{
-				s: &testStruct{},
-			},
-			want: &testStruct{
-				A: "A",
-				B: 1,
-				F: "V",
-			},
-			wantErr: false,
-		},
-		{
-			name: "Incorrect JSON",
-			fields: fields{
-				filepath: "./test/fileC.json",
-			},
-			args: args{
-				s: &testStruct{},
-			},
-			want:    &testStruct{},
-			wantErr: true,
-		},
-		{
-			name: "Required values",
-			fields: fields{
-				filepath: "./test/fileD.json",
-			},
-			args: args{
-				s: &testStruct{},
-			},
-			want: &testStruct{
-				A: "A",
-				B: 1,
-				F: "",
-			},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := &ConfigManager{
-				filepath: tt.fields.filepath,
-				watcher:  tt.fields.watcher,
+func TestConfigManager_Load_ValidJson(t *testing.T) {
+	config := generateDefaultConfig()
+	if bytes, err := json.Marshal(config); err == nil {
+		if file, err := ioutil.TempFile("", "test.json"); err == nil {
+			defer file.Close()
+			defer os.Remove(file.Name())
+			file.Write(bytes)
+
+			configmanager := &ConfigManager{
+				filepath: file.Name(),
+				watcher:  nil,
 			}
-			if err := config.Load(tt.args.s); (err != nil) != tt.wantErr {
-				t.Errorf("ConfigManager.Load() error = %v, wantErr %v", err, tt.wantErr)
+
+			var result testStruct
+			if err := configmanager.Load(&result); err != nil {
+				t.Errorf("Load_ValidJson() Error: %s", err)
 			}
-			if !reflect.DeepEqual(tt.args.s, tt.want) {
-				t.Errorf("ConfigManager.Load() = %+v, want %+v", tt.args.s, tt.want)
+			if !reflect.DeepEqual(result, config) {
+				t.Errorf("Load_ValidJson() %+v, want %+v", result, config)
 			}
-		})
+		}
+	} else {
+		t.Errorf("Load_ValidJson() failed to marshal config")
+	}
+}
+
+func TestConfigManager_Load_InvalidJson(t *testing.T) {
+	if file, err := ioutil.TempFile("", "test.json"); err == nil {
+		defer file.Close()
+		defer os.Remove(file.Name())
+		file.Write([]byte{0})
+
+		configmanager := &ConfigManager{
+			filepath: file.Name(),
+			watcher:  nil,
+		}
+
+		var result testStruct
+		if err := configmanager.Load(&result); err == nil {
+			t.Errorf("Load_InvalidJson() should return an error")
+		}
+	}
+}
+
+func TestConfigManager_Load_Required(t *testing.T) {
+	config := generateDefaultConfig()
+	config.F = ""
+	if bytes, err := json.Marshal(config); err == nil {
+		if file, err := ioutil.TempFile("", "test.json"); err == nil {
+			defer file.Close()
+			defer os.Remove(file.Name())
+			file.Write(bytes)
+
+			configmanager := &ConfigManager{
+				filepath: file.Name(),
+				watcher:  nil,
+			}
+
+			var result testStruct
+			if err := configmanager.Load(&result); err.Error() != "F is required, but blank" {
+				t.Errorf("Load_Required() Doesn't returns the correct error: %s", err)
+			}
+		}
+	} else {
+		t.Errorf("Load_Required() failed to marshal config")
+	}
+}
+
+func TestConfigManager_Load_Default(t *testing.T) {
+	config := generateDefaultConfig()
+	config.A = ""
+	config.B = 0
+	config.C = false
+	if bytes, err := json.Marshal(config); err == nil {
+		if file, err := ioutil.TempFile("", "test.json"); err == nil {
+			defer file.Close()
+			defer os.Remove(file.Name())
+			file.Write(bytes)
+
+			configmanager := &ConfigManager{
+				filepath: file.Name(),
+				watcher:  nil,
+			}
+
+			var result testStruct
+			if err := configmanager.Load(&result); err != nil {
+				t.Errorf("Load_Default() Error: %s", err)
+			}
+			if !reflect.DeepEqual(result, generateDefaultConfig()) {
+				t.Errorf("Load_Default() %+v, want %+v", result, generateDefaultConfig())
+			}
+		}
+	} else {
+		t.Errorf("Load_Default() failed to marshal config")
+	}
+}
+
+func TestConfigManager_Save(t *testing.T) {
+	if file, err := ioutil.TempFile("", "test.json"); err == nil {
+		defer os.Remove(file.Name())
+
+		configmanager := &ConfigManager{
+			filepath: file.Name(),
+			watcher:  nil,
+		}
+
+		var result testStruct
+		if err := configmanager.Save(&result); err != nil {
+			t.Errorf("Load_Default() Error: %s", err)
+		}
+		if _, err := os.Stat(file.Name()); os.IsNotExist(err) {
+			t.Errorf("Config file '%s' missing", file.Name())
+		}
 	}
 }
