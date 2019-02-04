@@ -49,7 +49,7 @@ func generateDefaultConfig() testStruct {
 }
 
 func TestInit(t *testing.T) {
-	currentEnv := os.Getenv("ERIA_PATH") // Save current env
+	currentEnv := os.Getenv("ERIA_CONF_PATH") // Save current env
 
 	// Create dummy file for file exist check
 	file, err := ioutil.TempFile("", "test.json")
@@ -96,7 +96,7 @@ func TestInit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("ERIA_PATH", tt.env)
+			os.Setenv("ERIA_CONF_PATH", tt.env)
 			got, err := Init(tt.args.fileName)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Init() error = %v, wantErr %v", err, tt.wantErr)
@@ -107,7 +107,7 @@ func TestInit(t *testing.T) {
 			}
 		})
 	}
-	os.Setenv("ERIA_PATH", currentEnv) // Restore current env
+	os.Setenv("ERIA_CONF_PATH", currentEnv) // Restore current env
 }
 
 func TestConfigManager_Load_ValidJson(t *testing.T) {

@@ -11,8 +11,8 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/Eria-Project/logger"
 	"github.com/ghodss/yaml"
+	"github.com/project-eria/logger"
 )
 
 // ConfigManager struct
@@ -24,9 +24,9 @@ type ConfigManager struct {
 // Init config manager
 func Init(fileName string) (*ConfigManager, error) {
 	logger.Module("configmanager").WithField("filename", fileName).Debug("Init config")
-	path := os.Getenv("ERIA_PATH")
+	path := os.Getenv("ERIA_CONF_PATH")
 	if path == "" {
-		return nil, errors.New("env ERIA_PATH not set")
+		return nil, errors.New("env ERIA_CONF_PATH not set")
 	}
 	filePath := filepath.Join(path, fileName)
 	configManager := &ConfigManager{
