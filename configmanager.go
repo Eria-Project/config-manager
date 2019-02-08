@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync"
+
+	"github.com/tidwall/gjson"
 
 	"github.com/fsnotify/fsnotify"
 
@@ -18,11 +21,14 @@ import (
 // ConfigManager struct
 type ConfigManager struct {
 	filepath string
+	json     []byte
 	watcher  *fsnotify.Watcher
+	s        interface{}
+	sync.Mutex
 }
 
-// Init config manager
-func Init(fileName string) (*ConfigManager, error) {
+// Init config manager with filename, and a struct
+func Init(fileName string, s interface{}) (*ConfigManager, error) {
 	logger.Module("configmanager").WithField("filename", fileName).Debug("Init config")
 	path := os.Getenv("ERIA_CONF_PATH")
 	if path == "" {
@@ -36,48 +42,73 @@ func Init(fileName string) (*ConfigManager, error) {
 		return nil, fmt.Errorf("Config file '%s' missing", filePath)
 	}
 
+	configManager.s = s
+
+	configManager.initWatcher(filePath)
+
 	return configManager, nil
 }
 
-// Load config from file
-func (config *ConfigManager) Load(s interface{}) error {
+// Load config from file, based on the configmanger parameters
+func (c *ConfigManager) Load() error {
+	c.Lock()
 	logger.Module("configmanager").Debug("Loading config")
-	bytes, err := ioutil.ReadFile(config.filepath)
+	bytes, err := ioutil.ReadFile(c.filepath)
 	if err != nil {
 		// TODO What to do if file doesn't exists
 		return err
 	}
 
-	if err := json.Unmarshal(bytes, s); err != nil {
+	if !gjson.ValidBytes(bytes) {
+		return errors.New("Not a valid JSON file")
+	}
+
+	// Save as json string
+	c.json = bytes
+
+	if err := json.Unmarshal(bytes, c.s); err != nil {
 		// TODO What to do if not json file
 		return err
 	}
 
-	if err := processTags(s); err != nil {
+	if err := processTags(c.s); err != nil {
 		return err
 	}
-	logger.Module("configmanager").Tracef("%+v", s)
+	logger.Module("configmanager").Tracef("%+v", c.s)
+	c.Unlock()
+
 	return nil
 }
 
-// Save config to file
-func (config *ConfigManager) Save(s interface{}) error {
-	logger.Module("configmanager").WithField("filename", config.filepath).Debug("Saving config")
+// Save config to file, based on the configmanger parameters
+func (c *ConfigManager) Save() error {
+	c.Lock()
 
-	bytes, err := json.MarshalIndent(s, "", "  ")
+	logger.Module("configmanager").WithField("filename", c.filepath).Debug("Saving config")
+
+	bytes, err := json.MarshalIndent(c.s, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return ioutil.WriteFile(config.filepath, bytes, 0644)
+	c.Unlock()
+	return ioutil.WriteFile(c.filepath, bytes, 0644)
 }
 
-// SaveAndClose ...
-func (config *ConfigManager) SaveAndClose(s interface{}) error {
-	//	if config.watcher != nil {
-	//	config.watcher.Close()
-	//	}
-	return config.Save(s)
+// SaveAndClose closes the watcher, and save the config to file
+func (c *ConfigManager) SaveAndClose() error {
+	closeWatcher()
+	return c.Save()
+}
+
+// Close closes the watcher
+func (c *ConfigManager) Close() {
+	closeWatcher()
+}
+
+// Watch a specific path, for value changes
+func (c *ConfigManager) Watch(path string) *Watcher {
+	return c.newWatcher(path)
 }
 
 func processTags(config interface{}) error {
