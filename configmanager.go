@@ -3,7 +3,6 @@ package configmanager
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -27,26 +26,40 @@ type ConfigManager struct {
 	sync.Mutex
 }
 
+const (
+	eNotFound   = "JSON Config file missing"
+	eEnvMissing = "env ERIA_CONF_PATH not set"
+)
+
 // Init config manager with filename, and a struct
 func Init(fileName string, s interface{}) (*ConfigManager, error) {
 	logger.Module("configmanager").WithField("filename", fileName).Debug("Init config")
 	path := os.Getenv("ERIA_CONF_PATH")
 	if path == "" {
-		return nil, errors.New("env ERIA_CONF_PATH not set")
+		return nil, errors.New(eEnvMissing)
 	}
 	filePath := filepath.Join(path, fileName)
 	configManager := &ConfigManager{
 		filepath: filePath,
+		s:        s,
 	}
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("Config file '%s' missing", filePath)
+		return configManager, errors.New(eNotFound)
 	}
-
-	configManager.s = s
 
 	configManager.initWatcher(filePath)
 
 	return configManager, nil
+}
+
+// IsEnvMissing return true if this is a missing ERIA_CONF_PATH env error
+func IsEnvMissing(e error) bool {
+	return e.Error() == eEnvMissing
+}
+
+// IsFileMissing return true if this is a file missing error
+func IsFileMissing(e error) bool {
+	return e.Error() == eNotFound
 }
 
 // Load config from file, based on the configmanger parameters
@@ -74,7 +87,7 @@ func (c *ConfigManager) Load() error {
 	if err := processTags(c.s); err != nil {
 		return err
 	}
-	logger.Module("configmanager").Tracef("%+v", c.s)
+	logger.Module("configmanager").Tracef("%#v", c.s)
 	c.Unlock()
 
 	return nil
