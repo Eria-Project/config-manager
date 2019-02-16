@@ -117,6 +117,7 @@ func (c *ConfigManager) SaveAndClose() error {
 // Close closes the watcher
 func (c *ConfigManager) Close() {
 	closeWatcher()
+	logger.Module("configmanager").WithField("filename", c.filepath).Debug("Closing config")
 }
 
 // Watch a specific path, for value changes
