@@ -9,12 +9,12 @@ import (
 	"reflect"
 	"sync"
 
+	logger "github.com/project-eria/eria-logger"
 	"github.com/tidwall/gjson"
 
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/ghodss/yaml"
-	"github.com/project-eria/logger"
 )
 
 // ConfigManager struct

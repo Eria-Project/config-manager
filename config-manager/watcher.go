@@ -2,7 +2,7 @@ package configmanager
 
 import (
 	"github.com/fsnotify/fsnotify"
-	"github.com/project-eria/logger"
+	logger "github.com/project-eria/eria-logger"
 	"github.com/tidwall/gjson"
 )
 

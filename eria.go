@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	configmanager "github.com/project-eria/eria-base/config-manager"
-	"github.com/project-eria/logger"
+	logger "github.com/project-eria/eria-logger"
 	"github.com/project-eria/xaal-go"
 )
 
